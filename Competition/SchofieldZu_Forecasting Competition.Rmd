@@ -1,0 +1,36 @@
+---
+title: "TSA: Forecasting Competition"
+author: "Hannah Schofield & Sebrina Zu"
+output: pdf_document
+always_allow_html: true
+editor_options: 
+  chunk_output_type: console
+  markdown: 
+    wrap: sentence
+---
+```{r package, message=FALSE, warning=FALSE}
+library(lubridate)
+library(ggplot2)
+library(forecast)  
+library(Kendall)
+library(tseries)
+library(outliers)
+library(tidyverse)
+library(smooth)
+library(zoo)
+library(kableExtra)
+```
+
+```{r}
+#Loading data
+library(readxl)
+load <- read_excel("Competition/Data/load.xlsx")
+relative_humidity <- read_excel("Competition/Data/relative_humidity.xlsx")
+temperature<-read_excel("Competition/Data/temperature.xlsx")
+```
+
+```{r}
+load_daily <- load %>% 
+  mutate(daily_average=rowMeans(load[,3:26]))
+```
+
