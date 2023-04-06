@@ -34,3 +34,7 @@ load_daily <- load %>%
   mutate(daily_average=rowMeans(load[,3:26]))
 ```
 
+```{r} 
+#test
+```
+
