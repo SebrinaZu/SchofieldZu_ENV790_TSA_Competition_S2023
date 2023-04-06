@@ -19,6 +19,7 @@ library(tidyverse)
 library(smooth)
 library(zoo)
 library(kableExtra)
+library(xlsx)
 ```
 
 ```{r}
@@ -161,5 +162,16 @@ autoplot(ts_avgDaily_test) +
   autolayer(NN_for,PI=FALSE, series="NN") +
   ylab("Daily Load") +
   guides(colour=guide_legend(title="Forecast"))
+
+```
+
+```{r}
+#convert to submission format 
+
+forecastRange <- seq(as.Date("2011-01-01"), as.Date("2011-12-31"), by="days")
+
+submission <- data.frame(forecastRange, ARIMA_Four_for$mean)
+
+write.xlsx(submission, file = "submission_schofield_zu.xlsx")
 
 ```
