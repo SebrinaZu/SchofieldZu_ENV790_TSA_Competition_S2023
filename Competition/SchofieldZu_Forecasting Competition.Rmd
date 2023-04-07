@@ -19,7 +19,7 @@ library(tidyverse)
 library(smooth)
 library(zoo)
 library(kableExtra)
-library(xlsx)
+#library(xlsx)
 ```
 
 ```{r}
@@ -34,7 +34,8 @@ temperature<-read_excel("Competition/Data/temperature.xlsx")
 #convert hourly to daily averages 
 load_daily <- load %>% 
   mutate(daily_average=rowMeans(load[,3:26]))  %>% 
-  select(date, daily_average)
+  select(date, daily_average)%>%
+  drop_na()
 
 ```
 
@@ -76,6 +77,12 @@ autoplot(ETS_fit) + ylab("Load")
 autoplot(ts_avgDaily) +
   autolayer(ETS_fit, series="STL + ETS",PI=FALSE) +
   ylab("Load")
+
+ETS_fit_2010<-stlf(ts_avgDaily,h=59)
+
+autoplot(ETS_fit_2010)
+
+ETS_fit_2010
 ```
 
 ```{r ARIMA}
@@ -104,6 +111,32 @@ autoplot(ts_avgDaily) +
 
 ```
 
+```{r}
+ARIMA_Four_fit_2010 <- auto.arima(ts_avgDaily, 
+                             seasonal=TRUE, 
+                             lambda=0,
+                             xreg=fourier(ts_avgDaily, 
+                                          K=c(2,12)))
+
+#Forecast with ARIMA fit
+#also need to specify h for fourier terms
+ARIMA_Four_for_2010 <- forecast(ARIMA_Four_fit_2010,
+                           xreg=fourier(ts_avgDaily,
+                                        K=c(2,12),
+                                        h=59),
+                                        h=59) 
+
+#Plot foresting results
+autoplot(ARIMA_Four_for) + ylab("Load")
+
+#Plot model + observed data
+autoplot(ts_avgDaily) +
+  autolayer(ARIMA_Four_for, series="ARIMA_FOURIER",PI=FALSE) +
+  ylab("Load")
+
+```
+
+
 ```{r NN}
 #NN_fit <- nnetar(ts_avgDaily_train,p=1,P=1)
 NN_fit <- nnetar(ts_avgDaily_train,p=1,P=0,xreg=fourier(ts_avgDaily_train, K=c(2,12)))
@@ -120,8 +153,17 @@ autoplot(ts_avgDaily) +
   autolayer(NN_for, series="Neural Network",PI=FALSE)+
   ylab("Load") 
 
+```
+
+```{r}
+#NN_fit <- nnetar(ts_avgDaily_train,p=1,P=1)
+NN_fit_2010 <- nnetar(ts_avgDaily,p=1,P=0,xreg=fourier(ts_avgDaily, K=c(2,12)))
+
+#NN_for <- forecast(NN_fit, h=365) 
+NN_for_2010 <- forecast(NN_fit_2010, h=59,xreg=fourier(ts_avgDaily, K=c(2,12),h=59))
 
 ```
+
 
 ```{r TBATS}
 # TBATS can take time to fit
@@ -194,10 +236,11 @@ scores <- as.data.frame(
   rbind(ETS_scores, ARIMA_scores, NN_scores))
 #, NN_scores, TBAT_scores))
 row.names(scores) <- c("STL+ETS", "ARIMA+Fourier", "NN")
+SARIMA_scores
 
 #choose model with lowest RMSE
-best_model_index <- which.min(scores[,"RMSE"])
-cat("The best model by RMSE is:", row.names(scores[best_model_index,]))  
+best_model_index <- which.min(scores[,"MAPE"])
+cat("The best model by MAPE is:", row.names(scores[best_model_index,]))  
 
 ```
 
@@ -215,17 +258,26 @@ autoplot(ts_avgDaily_test) +
 #convert to submission format 
 
 forecastRange <- seq(as.Date("2011-01-01"), as.Date("2011-02-28"), by="days")
-forecastDat<- ARIMA_Four_for$mean[1:59]
-
+forecastDat<- ARIMA_Four_for_2010$mean
 submission <- data.frame(forecastRange, forecastDat)
-write.xlsx(submission, file = "submission_schofield_zu4.xlsx")
+colnames(submission)<-c("date","load")
+write.csv(submission, file = "submission_schofield_zu_AF.csv",row.names = FALSE)
 
 ```
 
 ```{r}
+forecastDat3<- NN_for_2010$mean
+submission <- data.frame(forecastRange, forecastDat3)
+colnames(submission)<-c("date","load")
+write.csv(submission, file = "submission_schofield_zu_NN.csv",row.names = FALSE)
+
+```
+
+
+```{r}
 #convert to submission format 
 
-forecastDat2 <- ETS_fit$mean[1:59]
+forecastDat2 <- ETS_fit$lower[1:59]
 
 submission2 <- data.frame(forecastRange,forecastDat2)
 submission2
