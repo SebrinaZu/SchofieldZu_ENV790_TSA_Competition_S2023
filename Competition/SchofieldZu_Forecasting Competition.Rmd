@@ -20,11 +20,11 @@ library(smooth)
 library(zoo)
 library(kableExtra)
 #library(xlsx)
+library(readxl)
 ```
 
 ```{r}
 #Loading data
-library(readxl)
 load <- read_excel("Competition/Data/load.xlsx")
 relative_humidity <- read_excel("Competition/Data/relative_humidity.xlsx")
 temperature<-read_excel("Competition/Data/temperature.xlsx")
@@ -37,6 +37,21 @@ load_daily <- load %>%
   select(date, daily_average)%>%
   drop_na()
 
+#Temperature daily average
+temperature_daily <- temperature %>% 
+  mutate(average=rowMeans(temperature[,3:30]))  %>% 
+  select(date, average)%>%
+  group_by(date) %>%
+  summarize(daily_temp = sum(average))%>%
+  drop_na()
+
+#Humidity daily average
+humidity_daily <- relative_humidity %>% 
+  mutate(average_h=rowMeans(relative_humidity[,3:30]))  %>% 
+  select(date, average_h)%>%
+  group_by(date) %>%
+  summarize(daily_humid = sum(average_h))%>%
+  drop_na()
 ```
 
 ```{r}
@@ -66,6 +81,16 @@ autoplot(ts_avgDaily_train)
 autoplot(ts_avgDaily_test)
 
 ```
+
+```{r}
+df_list = list(temperature_daily,humidity_daily,load_daily) 
+exog_data<-df_list %>% reduce(full_join, by='date')%>%drop_na()
+exog_temp<-msts(exog_data$daily_temp, 
+                           seasonal.periods =c(7,365.25),
+                           start=c(2005,1,1))
+exog_temp_train <- subset(exog_temp,end = length(ts_avgDaily)-n_for)
+```
+
 
 ```{r ETS}
 ETS_fit <-  stlf(ts_avgDaily_train,h=365)
@@ -202,6 +227,19 @@ SSES_seas <- es(ts_avgDaily_train,h=n_for,holdout=FALSE)
 
 SS_seas <- StructTS(ts_avgDaily_train,
                     type="BSM",fixed=c(0,0.001,0.3,NA)) 
+```
+
+```{r Exogenous Variables}
+ARIMAX_fit <- auto.arima(ts_avgDaily_train, 
+                             seasonal=TRUE, 
+                             lambda=0,
+                             xreg=exog_temp_train)
+
+#Forecast with ARIMA fit
+#also need to specify h for fourier terms
+ARIMA_Four_for <- forecast(ARIMA_Four_fit,
+                           xreg=exog_data_train,
+                                        h=365) 
 ```
 
 
