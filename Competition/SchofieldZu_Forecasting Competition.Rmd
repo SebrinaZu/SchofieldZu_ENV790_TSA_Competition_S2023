@@ -85,10 +85,14 @@ autoplot(ts_avgDaily_test)
 ```{r}
 df_list = list(temperature_daily,humidity_daily,load_daily) 
 exog_data<-df_list %>% reduce(full_join, by='date')%>%drop_na()
-exog_temp<-msts(exog_data$daily_temp, 
+exog_ts<-msts(exog_data$daily_temp, 
                            seasonal.periods =c(7,365.25),
                            start=c(2005,1,1))
-exog_temp_train <- subset(exog_temp,end = length(ts_avgDaily)-n_for)
+n_for = 365
+exog_temp_train <- subset(exog_ts,end = length(ts_avgDaily)-n_for)
+
+exog_temp_test <- subset(exog_ts,start = length(ts_avgDaily)-n_for)
+
 ```
 
 
@@ -223,10 +227,10 @@ autoplot(ts_avgDaily) +
 ```
 
 ```{r SSES}
-SSES_seas <- es(ts_avgDaily_train,h=n_for,holdout=FALSE)
+#SSES_seas <- es(ts_avgDaily_train,h=n_for,holdout=FALSE)
 
-SS_seas <- StructTS(ts_avgDaily_train,
-                    type="BSM",fixed=c(0,0.001,0.3,NA)) 
+#SS_seas <- StructTS(ts_avgDaily_train,
+                    #type="BSM",fixed=c(0,0.001,0.3,NA)) 
 ```
 
 ```{r Exogenous Variables}
@@ -238,7 +242,7 @@ ARIMAX_fit <- auto.arima(ts_avgDaily_train,
 #Forecast with ARIMA fit
 #also need to specify h for fourier terms
 ARIMA_Four_for <- forecast(ARIMA_Four_fit,
-                           xreg=exog_data_train,
+                           xreg=exog_temp_train,
                                         h=365) 
 ```
 
