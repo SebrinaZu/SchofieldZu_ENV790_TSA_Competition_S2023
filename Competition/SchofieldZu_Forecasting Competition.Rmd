@@ -272,9 +272,32 @@ ARIMAX_Four_for <- forecast(ARIMAX_fit,
 ```
 
 ```{r}
+#NN_fit <- nnetar(ts_avgDaily_train,p=1,P=1)
+NNX_fit_train <- nnetar(ts_avgDaily_train,p=1,P=0,xreg=cbind(exog_train[,1],exog_train[,2],fourier(ts_avgDaily_train,K=c(2,6))))
+
+NN_fit_temp_train<-nnetar(exog_train[,1])
+NN_fit_humid_train<-nnetar(exog_train[,2])
+NN_Temp_for_train<-forecast(NN_fit_temp_train,h=365)
+NN_Humid_for_train<-forecast(NN_fit_humid_train,h=365)
+
+#NN_for <- forecast(NN_fit, h=365) 
+NNX_for_train <- forecast(NNX_fit_train,xreg=cbind(NN_Temp_for_train$mean,NN_Humid_for_train$mean,fourier(ts_avgDaily_train,K=c(2,6),h=365)),h=365)
+
 
 ```
 
+```{r}
+#NN_fit <- nnetar(ts_avgDaily_train,p=1,P=1)
+NNX_fit <- nnetar(ts_avgDaily,p=1,P=0,xreg=cbind(exog_ts[,1],exog_ts[,2],fourier(ts_avgDaily,K=c(2,6))))
+
+NN_fit_temp<-nnetar(exog_ts[,1])
+NN_fit_humid<-nnetar(exog_ts[,2])
+NN_Temp_for<-forecast(NN_fit_temp,h=59)
+NN_Humid_for<-forecast(NN_fit_humid,h=59)
+
+#NN_for <- forecast(NN_fit, h=365) 
+NNX_for <- forecast(NNX_fit,xreg=cbind(NN_Temp_for$mean,NN_Humid_for$mean,fourier(ts_avgDaily,K=c(2,6),h=59)),h=59)
+```
 
 
 ```{r scores}
@@ -302,18 +325,19 @@ SARIMA_scores <- accuracy(SARIMA_for$mean,ts_avgDaily_test)
 # Model 8:  ARIMAX
 ARIMAX_scores<- accuracy(ARIMAX_Four_for_train$mean,ts_avgDaily_test)
 
+#Model 9: NNX
+NNX_scores<- accuracy(NNX_for_train$mean,ts_avgDaily_test)
 ```
 
 
 ```{r RMSE}
 #create data frame
 scores <- as.data.frame(
-  rbind(ETS_scores, ARIMA_scores, NN_scores,TBAT_scores,SARIMA_scores,ARIMAX_scores))
-#, NN_scores, TBAT_scores))
-row.names(scores) <- c("STL+ETS", "ARIMA+Fourier", "NN","TBAT","SARIMA","ARIMAX")
-#SARIMA_scores
+  rbind(ETS_scores, ARIMA_scores, NN_scores,TBAT_scores,SARIMA_scores,ARIMAX_scores,NNX_scores))
 
-#choose model with lowest RMSE
+row.names(scores) <- c("STL+ETS", "ARIMA+Fourier", "NN","TBAT","SARIMA","ARIMAX","NNX")
+
+#choose model with lowest MAPE
 best_model_index <- which.min(scores[,"MAPE"])
 cat("The best model by MAPE is:", row.names(scores[best_model_index,]))  
 
@@ -352,12 +376,11 @@ write.csv(submission, file = "submission_schofield_zu_NN.csv",row.names = FALSE)
 ```{r}
 #convert to submission format 
 
-forecastDat2 <- ETS_fit$lower[1:59]
-
-submission2 <- data.frame(forecastRange,forecastDat2)
-submission2
-
-write.xlsx(submission2, file = "submission_schofield_zu3.xlsx")
+forecastRange <- seq(as.Date("2011-01-01"), as.Date("2011-02-28"), by="days")
+forecastDat2<- NNX_for$mean
+submission <- data.frame(forecastRange, forecastDat2)
+colnames(submission)<-c("date","load")
+write.csv(submission, file = "submission_schofield_zu_NNX.csv",row.names = FALSE)
 
 ```
 ```
