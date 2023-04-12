@@ -33,25 +33,23 @@ temperature<-read_excel("Competition/Data/temperature.xlsx")
 ```{r}
 #convert hourly to daily averages 
 load_daily <- load %>% 
-  mutate(daily_average=rowMeans(load[,3:26]))  %>% 
-  select(date, daily_average)%>%
-  drop_na()
+  mutate(daily_average=rowMeans(load[,3:26],na.rm=TRUE))  %>% 
+  select(date, daily_average)
+
 
 #Temperature daily average
 temperature_daily <- temperature %>% 
-  mutate(average=rowMeans(temperature[,3:30]))  %>% 
+  mutate(average=rowMeans(temperature[,3:30],na.rm=TRUE))  %>% 
   select(date, average)%>%
   group_by(date) %>%
-  summarize(daily_temp = sum(average))%>%
-  drop_na()
+  summarize(daily_temp = sum(average))
 
 #Humidity daily average
 humidity_daily <- relative_humidity %>% 
-  mutate(average_h=rowMeans(relative_humidity[,3:30]))  %>% 
+  mutate(average_h=rowMeans(relative_humidity[,3:30],na.rm=TRUE))  %>% 
   select(date, average_h)%>%
   group_by(date) %>%
-  summarize(daily_humid = sum(average_h))%>%
-  drop_na()
+  summarize(daily_humid = sum(average_h))
 ```
 
 ```{r}
@@ -84,14 +82,14 @@ autoplot(ts_avgDaily_test)
 
 ```{r}
 df_list = list(temperature_daily,humidity_daily,load_daily) 
-exog_data<-df_list %>% reduce(full_join, by='date')%>%drop_na()
-exog_ts<-msts(exog_data$daily_temp, 
+exog_data<-df_list %>% reduce(full_join, by='date')
+exog_ts<-msts(exog_data[,2:3], 
                            seasonal.periods =c(7,365.25),
                            start=c(2005,1,1))
 n_for = 365
-exog_temp_train <- subset(exog_ts,end = length(ts_avgDaily)-n_for)
+exog_train <- head(exog_ts, n=nrow(exog_ts)-n_for)
 
-exog_temp_test <- subset(exog_ts,start = length(ts_avgDaily)-n_for)
+exog_test <- tail(exog_ts,n=n_for+1)
 
 ```
 
@@ -117,7 +115,7 @@ ETS_fit_2010
 ```{r ARIMA}
 
 ARIMA_Four_fit <- auto.arima(ts_avgDaily_train, 
-                             seasonal=TRUE, 
+                             seasonal=FALSE, 
                              lambda=0,
                              xreg=fourier(ts_avgDaily_train, 
                                           K=c(2,12)))
@@ -142,7 +140,7 @@ autoplot(ts_avgDaily) +
 
 ```{r}
 ARIMA_Four_fit_2010 <- auto.arima(ts_avgDaily, 
-                             seasonal=TRUE, 
+                             seasonal=FALSE, 
                              lambda=0,
                              xreg=fourier(ts_avgDaily, 
                                           K=c(2,12)))
@@ -233,18 +231,50 @@ autoplot(ts_avgDaily) +
                     #type="BSM",fixed=c(0,0.001,0.3,NA)) 
 ```
 
-```{r Exogenous Variables}
-ARIMAX_fit <- auto.arima(ts_avgDaily_train, 
-                             seasonal=TRUE, 
+```{r}
+ARIMAX_fit_train <- auto.arima(ts_avgDaily_train, 
+                             seasonal=FALSE, 
                              lambda=0,
-                             xreg=exog_temp_train)
+                            xreg=cbind(exog_train[,1],exog_train[,2],fourier(ts_avgDaily_train,K=c(2,6)))
+                         )
+
+Exog_fit_temp_train<-auto.arima(exog_train[,1])
+Exog_fit_humid_train<-auto.arima(exog_train[,2])
+Temp_for_train<-forecast(Exog_fit_temp_train,h=365)
+Humid_for_train<-forecast(Exog_fit_humid_train,h=365)
+
+
+ARIMAX_Four_for_train <- forecast(ARIMAX_fit_train,
+                           xreg=cbind(Temp_for_train$mean,Humid_for_train$mean,fourier(ts_avgDaily_train,K=c(2,6),h=365)),
+                                        h=365) 
+
+
+```
+
+
+```{r Exogenous Variables}
+ARIMAX_fit <- auto.arima(ts_avgDaily, 
+                             seasonal=FALSE, 
+                             lambda=0,
+                            xreg=cbind(exog_ts[,1],exog_ts[,2],fourier(ts_avgDaily,K=c(2,12)))
+                         )
+
+Exog_fit_temp<-auto.arima(exog_ts[,1])
+Exog_fit_humid<-auto.arima(exog_ts[,2])
+Temp_for<-forecast(Exog_fit_temp,h=59)
+Humid_for<-forecast(Exog_fit_humid,h=59)
 
 #Forecast with ARIMA fit
 #also need to specify h for fourier terms
-ARIMA_Four_for <- forecast(ARIMA_Four_fit,
-                           xreg=exog_temp_train,
-                                        h=365) 
+ARIMAX_Four_for <- forecast(ARIMAX_fit,
+                           xreg=cbind(Temp_for$mean,Humid_for$mean,fourier(ts_avgDaily,K=c(2,12),h=59)),
+                                        h=59) 
 ```
+
+```{r}
+
+```
+
 
 
 ```{r scores}
@@ -264,10 +294,13 @@ TBAT_scores <- accuracy(TBATS_for$mean,ts_avgDaily_test)
 SARIMA_scores <- accuracy(SARIMA_for$mean,ts_avgDaily_test)
 
 # Model 6:  SSES
-SSES_scores <- accuracy(SSES_seas$forecast,ts_avgDaily_test)
+#SSES_scores <- accuracy(SSES_seas$forecast,ts_avgDaily_test)
 
 # Model 7:  BSM 
-SS_scores <- accuracy(SS_for$mean,ts_avgDaily_test)
+#SS_scores <- accuracy(SS_for$mean,ts_avgDaily_test)
+
+# Model 8:  ARIMAX
+ARIMAX_scores<- accuracy(ARIMAX_Four_for_train$mean,ts_avgDaily_test)
 
 ```
 
@@ -275,10 +308,10 @@ SS_scores <- accuracy(SS_for$mean,ts_avgDaily_test)
 ```{r RMSE}
 #create data frame
 scores <- as.data.frame(
-  rbind(ETS_scores, ARIMA_scores, NN_scores))
+  rbind(ETS_scores, ARIMA_scores, NN_scores,TBAT_scores,SARIMA_scores,ARIMAX_scores))
 #, NN_scores, TBAT_scores))
-row.names(scores) <- c("STL+ETS", "ARIMA+Fourier", "NN")
-SARIMA_scores
+row.names(scores) <- c("STL+ETS", "ARIMA+Fourier", "NN","TBAT","SARIMA","ARIMAX")
+#SARIMA_scores
 
 #choose model with lowest RMSE
 best_model_index <- which.min(scores[,"MAPE"])
@@ -300,10 +333,10 @@ autoplot(ts_avgDaily_test) +
 #convert to submission format 
 
 forecastRange <- seq(as.Date("2011-01-01"), as.Date("2011-02-28"), by="days")
-forecastDat<- ARIMA_Four_for_2010$mean
+forecastDat<- ARIMAX_Four_for$mean
 submission <- data.frame(forecastRange, forecastDat)
 colnames(submission)<-c("date","load")
-write.csv(submission, file = "submission_schofield_zu_AF.csv",row.names = FALSE)
+write.csv(submission, file = "submission_schofield_zu_ARIMAX.csv",row.names = FALSE)
 
 ```
 
