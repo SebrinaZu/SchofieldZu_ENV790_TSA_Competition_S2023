@@ -53,6 +53,7 @@ humidity_daily <- relative_humidity %>%
 ```
 
 ```{r}
+#ACF and PACF Plot
 par(mfrow=c(1,2))
 ACF_Plot <- Acf(load_daily$daily_average, lag = 40, plot = TRUE,main="")
 PACF_Plot <- Pacf(load_daily$daily_average, lag = 40, plot = TRUE,main="")
@@ -60,12 +61,13 @@ par(mfrow=c(1,1))
 
 ```
 
+
+## Load Data
 ```{r} 
 #convert to time series 
 ts_avgDaily <- msts(load_daily$daily_average, 
                            seasonal.periods =c(7,365.25),
                            start=c(2005,1,1))
-
 ```
 
 ```{r}
@@ -80,6 +82,7 @@ autoplot(ts_avgDaily_test)
 
 ```
 
+## Exogenous Data
 ```{r}
 df_list = list(temperature_daily,humidity_daily,load_daily) 
 exog_data<-df_list %>% reduce(full_join, by='date')
@@ -93,8 +96,8 @@ exog_test <- tail(exog_ts,n=n_for+1)
 
 ```
 
-
-```{r ETS}
+## Forecast on Training Data
+```{r STL+ETS}
 ETS_fit <-  stlf(ts_avgDaily_train,h=365)
 
 #Plot foresting results
@@ -108,11 +111,9 @@ autoplot(ts_avgDaily) +
 ETS_fit_2010<-stlf(ts_avgDaily,h=59)
 
 autoplot(ETS_fit_2010)
-
-ETS_fit_2010
 ```
 
-```{r ARIMA}
+```{r ARIMA+Fourier}
 
 ARIMA_Four_fit <- auto.arima(ts_avgDaily_train, 
                              seasonal=FALSE, 
@@ -138,37 +139,9 @@ autoplot(ts_avgDaily) +
 
 ```
 
-```{r}
-ARIMA_Four_fit_2010 <- auto.arima(ts_avgDaily, 
-                             seasonal=FALSE, 
-                             lambda=0,
-                             xreg=fourier(ts_avgDaily, 
-                                          K=c(2,12)))
-
-#Forecast with ARIMA fit
-#also need to specify h for fourier terms
-ARIMA_Four_for_2010 <- forecast(ARIMA_Four_fit_2010,
-                           xreg=fourier(ts_avgDaily,
-                                        K=c(2,12),
-                                        h=59),
-                                        h=59) 
-
-#Plot foresting results
-autoplot(ARIMA_Four_for) + ylab("Load")
-
-#Plot model + observed data
-autoplot(ts_avgDaily) +
-  autolayer(ARIMA_Four_for, series="ARIMA_FOURIER",PI=FALSE) +
-  ylab("Load")
-
-```
-
-
-```{r NN}
-#NN_fit <- nnetar(ts_avgDaily_train,p=1,P=1)
+```{r Neural Network}
 NN_fit <- nnetar(ts_avgDaily_train,p=1,P=0,xreg=fourier(ts_avgDaily_train, K=c(2,12)))
 
-#NN_for <- forecast(NN_fit, h=365) 
 NN_for <- forecast(NN_fit, h=365,xreg=fourier(ts_avgDaily_train, K=c(2,12),h=365))
 
 #Plot foresting results
@@ -182,18 +155,7 @@ autoplot(ts_avgDaily) +
 
 ```
 
-```{r}
-#NN_fit <- nnetar(ts_avgDaily_train,p=1,P=1)
-NN_fit_2010 <- nnetar(ts_avgDaily,p=1,P=0,xreg=fourier(ts_avgDaily, K=c(2,12)))
-
-#NN_for <- forecast(NN_fit, h=365) 
-NN_for_2010 <- forecast(NN_fit_2010, h=59,xreg=fourier(ts_avgDaily, K=c(2,12),h=59))
-
-```
-
-
 ```{r TBATS}
-# TBATS can take time to fit
 TBATS_fit <- tbats(ts_avgDaily_train)
 
 TBATS_for <- forecast(TBATS_fit, h=n_for)
@@ -225,13 +187,14 @@ autoplot(ts_avgDaily) +
 ```
 
 ```{r SSES}
-#SSES_seas <- es(ts_avgDaily_train,h=n_for,holdout=FALSE)
+SSES_seas <- es(ts_avgDaily_train,h=n_for,holdout=FALSE)
 
-#SS_seas <- StructTS(ts_avgDaily_train,
-                    #type="BSM",fixed=c(0,0.001,0.3,NA)) 
+SS_for <- StructTS(ts_avgDaily_train,
+                    type="BSM",fixed=c(0,0.001,0.3,NA)) 
+
 ```
 
-```{r}
+```{r ARIMAX (with Exogenous Variables)}
 ARIMAX_fit_train <- auto.arima(ts_avgDaily_train, 
                              seasonal=FALSE, 
                              lambda=0,
@@ -248,31 +211,9 @@ ARIMAX_Four_for_train <- forecast(ARIMAX_fit_train,
                            xreg=cbind(Temp_for_train$mean,Humid_for_train$mean,fourier(ts_avgDaily_train,K=c(2,6),h=365)),
                                         h=365) 
 
-
 ```
 
-
-```{r Exogenous Variables}
-ARIMAX_fit <- auto.arima(ts_avgDaily, 
-                             seasonal=FALSE, 
-                             lambda=0,
-                            xreg=cbind(exog_ts[,1],exog_ts[,2],fourier(ts_avgDaily,K=c(2,12)))
-                         )
-
-Exog_fit_temp<-auto.arima(exog_ts[,1])
-Exog_fit_humid<-auto.arima(exog_ts[,2])
-Temp_for<-forecast(Exog_fit_temp,h=59)
-Humid_for<-forecast(Exog_fit_humid,h=59)
-
-#Forecast with ARIMA fit
-#also need to specify h for fourier terms
-ARIMAX_Four_for <- forecast(ARIMAX_fit,
-                           xreg=cbind(Temp_for$mean,Humid_for$mean,fourier(ts_avgDaily,K=c(2,12),h=59)),
-                                        h=59) 
-```
-
-```{r}
-#NN_fit <- nnetar(ts_avgDaily_train,p=1,P=1)
+```{r Neural Network + Exogenous Variables}
 NNX_fit_train <- nnetar(ts_avgDaily_train,p=1,P=0,xreg=cbind(exog_train[,1],exog_train[,2],fourier(ts_avgDaily_train,K=c(2,6))))
 
 NN_fit_temp_train<-nnetar(exog_train[,1])
@@ -280,26 +221,13 @@ NN_fit_humid_train<-nnetar(exog_train[,2])
 NN_Temp_for_train<-forecast(NN_fit_temp_train,h=365)
 NN_Humid_for_train<-forecast(NN_fit_humid_train,h=365)
 
-#NN_for <- forecast(NN_fit, h=365) 
 NNX_for_train <- forecast(NNX_fit_train,xreg=cbind(NN_Temp_for_train$mean,NN_Humid_for_train$mean,fourier(ts_avgDaily_train,K=c(2,6),h=365)),h=365)
 
 
 ```
 
-```{r}
-#NN_fit <- nnetar(ts_avgDaily_train,p=1,P=1)
-NNX_fit <- nnetar(ts_avgDaily,p=1,P=0,xreg=cbind(exog_ts[,1],exog_ts[,2],fourier(ts_avgDaily,K=c(2,6))))
 
-NN_fit_temp<-nnetar(exog_ts[,1])
-NN_fit_humid<-nnetar(exog_ts[,2])
-NN_Temp_for<-forecast(NN_fit_temp,h=59)
-NN_Humid_for<-forecast(NN_fit_humid,h=59)
-
-#NN_for <- forecast(NN_fit, h=365) 
-NNX_for <- forecast(NNX_fit,xreg=cbind(NN_Temp_for$mean,NN_Humid_for$mean,fourier(ts_avgDaily,K=c(2,6),h=59)),h=59)
-```
-
-
+## Comparing Model Scores and Forecasts
 ```{r scores}
 #Model 1: STL + ETS
 ETS_scores <- accuracy(ETS_fit$mean,ts_avgDaily_test)  
@@ -317,10 +245,10 @@ TBAT_scores <- accuracy(TBATS_for$mean,ts_avgDaily_test)
 SARIMA_scores <- accuracy(SARIMA_for$mean,ts_avgDaily_test)
 
 # Model 6:  SSES
-#SSES_scores <- accuracy(SSES_seas$forecast,ts_avgDaily_test)
+SSES_scores <- accuracy(SSES_seas$forecast,ts_avgDaily_test)
 
 # Model 7:  BSM 
-#SS_scores <- accuracy(SS_for$mean,ts_avgDaily_test)
+SS_scores <- accuracy(SS_for$mean,ts_avgDaily_test)
 
 # Model 8:  ARIMAX
 ARIMAX_scores<- accuracy(ARIMAX_Four_for_train$mean,ts_avgDaily_test)
@@ -329,8 +257,7 @@ ARIMAX_scores<- accuracy(ARIMAX_Four_for_train$mean,ts_avgDaily_test)
 NNX_scores<- accuracy(NNX_for_train$mean,ts_avgDaily_test)
 ```
 
-
-```{r RMSE}
+```{r MAPE}
 #create data frame
 scores <- as.data.frame(
   rbind(ETS_scores, ARIMA_scores, NN_scores,TBAT_scores,SARIMA_scores,ARIMAX_scores,NNX_scores))
@@ -353,6 +280,68 @@ autoplot(ts_avgDaily_test) +
 
 ```
 
+## Forecasting on 2010 Data (Final Forecast Result)
+```{r Neural Network }
+NN_fit_2010 <- nnetar(ts_avgDaily,p=1,P=0,xreg=fourier(ts_avgDaily, K=c(2,12)))
+
+NN_for_2010 <- forecast(NN_fit_2010, h=59,xreg=fourier(ts_avgDaily, K=c(2,12),h=59))
+
+```
+
+```{r ARIMA + Fourier}
+ARIMA_Four_fit_2010 <- auto.arima(ts_avgDaily, 
+                             seasonal=FALSE, 
+                             lambda=0,
+                             xreg=fourier(ts_avgDaily, 
+                                          K=c(2,12)))
+
+ARIMA_Four_for_2010 <- forecast(ARIMA_Four_fit_2010,
+                           xreg=fourier(ts_avgDaily,
+                                        K=c(2,12),
+                                        h=59),
+                                        h=59) 
+
+#Plot foresting results
+autoplot(ARIMA_Four_for) + ylab("Load")
+
+#Plot model + observed data
+autoplot(ts_avgDaily) +
+  autolayer(ARIMA_Four_for, series="ARIMA_FOURIER",PI=FALSE) +
+  ylab("Load")
+
+```
+
+```{r ARIMAX (with Exogenous Variables)}
+ARIMAX_fit <- auto.arima(ts_avgDaily, 
+                             seasonal=FALSE, 
+                             lambda=0,
+                            xreg=cbind(exog_ts[,1],exog_ts[,2],fourier(ts_avgDaily,K=c(2,12)))
+                         )
+
+Exog_fit_temp<-auto.arima(exog_ts[,1])
+Exog_fit_humid<-auto.arima(exog_ts[,2])
+Temp_for<-forecast(Exog_fit_temp,h=59)
+Humid_for<-forecast(Exog_fit_humid,h=59)
+
+#Forecast with ARIMA fit
+#also need to specify h for fourier terms
+ARIMAX_Four_for <- forecast(ARIMAX_fit,
+                           xreg=cbind(Temp_for$mean,Humid_for$mean,fourier(ts_avgDaily,K=c(2,12),h=59)),
+                                        h=59) 
+```
+
+```{r Neural Network + Exogenous Variables}
+NNX_fit <- nnetar(ts_avgDaily,p=1,P=0,xreg=cbind(exog_ts[,1],exog_ts[,2],fourier(ts_avgDaily,K=c(2,6))))
+
+NN_fit_temp<-nnetar(exog_ts[,1])
+NN_fit_humid<-nnetar(exog_ts[,2])
+NN_Temp_for<-forecast(NN_fit_temp,h=59)
+NN_Humid_for<-forecast(NN_fit_humid,h=59)
+
+NNX_for <- forecast(NNX_fit,xreg=cbind(NN_Temp_for$mean,NN_Humid_for$mean,fourier(ts_avgDaily,K=c(2,6),h=59)),h=59)
+```
+
+## Submission Conversion
 ```{r}
 #convert to submission format 
 
