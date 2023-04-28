@@ -27,9 +27,11 @@ library(kableExtra)
 library(readxl)
 ```
 
-## Data Wrangling 
+## Data Wrangling
 
-We began this project by loading in three datasets: hourly load, hourl temperature and hourly humidity. Each dataset was manipulated to create figures for daily averages to be used in the forecasting process. These datasets were then converted to time series objects, which was then subsetted into training and testing sets to inform the model. 
+We began this project by loading in three datasets: hourly load, hourl temperature and hourly humidity.
+Each dataset was manipulated to create figures for daily averages to be used in the forecasting process.
+These datasets were then converted to time series objects, which was then subsetted into training and testing sets to inform the model.
 
 ```{r load, message=FALSE, include = FALSE}
 #Loading data
@@ -60,8 +62,9 @@ humidity_daily <- relative_humidity %>%
 
 ```
 
-### ACF and PACF 
-We first visualized the data, its residuals, and the pattern in the time series object. 
+### ACF and PACF
+
+We first visualized the data, its residuals, and the pattern in the time series object.
 
 ```{r acfs, message = FALSE}
 #ACF and PACF Plot
@@ -72,7 +75,7 @@ par(mfrow=c(1,1))
 
 ```
 
-```{r ts, include = FALSE} 
+```{r ts, include = FALSE}
 #convert to time series 
 ts_avgDaily <- msts(load_daily$daily_average, 
                            seasonal.periods =c(7,365.25),
@@ -93,6 +96,7 @@ autoplot(ts_avgDaily_test)
 ```
 
 ## Exogenous Data
+
 ```{r exog, include = FALSE}
 df_list = list(temperature_daily,humidity_daily,load_daily) 
 exog_data<-df_list %>% reduce(full_join, by='date')
@@ -108,7 +112,8 @@ exog_test <- tail(exog_ts,n=n_for+1)
 
 ## Forecast on Training Data
 
-### STL + ETS 
+### STL + ETS
+
 ```{r STL+ETS, echo = FALSE}
 ETS_fit <-  stlf(ts_avgDaily_train,h=365)
 
@@ -152,7 +157,8 @@ autoplot(ts_avgDaily, ylab = "Load", main = "ARIMA + Fourier vs Observed Data") 
 
 ```
 
-### Neural Network 
+### Neural Network
+
 ```{r Neural Network, echo = FALSE}
 NN_fit <- nnetar(ts_avgDaily_train,p=1,P=0,xreg=fourier(ts_avgDaily_train, K=c(2,12)))
 
@@ -167,7 +173,8 @@ autoplot(ts_avgDaily, ylab = "Load", main = "Neural Network vs Observed Data") +
 
 ```
 
-### TBATS 
+### TBATS
+
 ```{r TBATS, echo = FALSE}
 TBATS_fit <- tbats(ts_avgDaily_train)
 
@@ -183,6 +190,7 @@ autoplot(ts_avgDaily, ylab = "Load", main = "TBATS vs Observed Data") +
 ```
 
 ### SARIMA
+
 ```{r SARIMA, echo = FALSE}
 SARIMA_autofit <- auto.arima(ts_avgDaily_train)
 
@@ -196,7 +204,8 @@ autoplot(ts_avgDaily, ylab = "Load", main = "SARIMA vs Observed Data") +
   autolayer(SARIMA_for, series="SARIMA",PI=FALSE)
 ```
 
-### ARIMA with Exogenous Variables 
+### ARIMA with Exogenous Variables
+
 ```{r ARIMAX with Exogenous Variables, echo = FALSE, warning = FALSE}
 ARIMAX_fit_train <- auto.arima(ts_avgDaily_train, 
                              seasonal=FALSE, 
@@ -210,10 +219,16 @@ Humid_for_train<-forecast(Exog_fit_humid_train,h=365)
 
 
 ARIMAX_Four_for_train <- forecast(ARIMAX_fit_train,                      xreg=cbind(Temp_for_train$mean,Humid_for_train$mean,fourier(ts_avgDaily_train,K=c(2,6),h=365)), h=365) 
+#Plot foresting results
+autoplot(ARIMAX_Four_for_train, ylab = "Load", main = "ARIMAX Forecast") 
 
+#Plot model + observed data
+autoplot(ts_avgDaily, ylab = "Load", main = "ARIMAX vs Observed Data") +
+  autolayer(ARIMAX_Four_for_train, series="ARIMAX",PI=FALSE)
 ```
 
 ### Neural Network with Exogenous Variables
+
 ```{r Neural Network + Exogenous Variables, echo = FALSE, warning = FALSE}
 NNX_fit_train <- nnetar(ts_avgDaily_train,p=1,P=0,xreg=cbind(exog_train[,1],exog_train[,2],fourier(ts_avgDaily_train,K=c(2,6))))
 
@@ -224,10 +239,16 @@ NN_Humid_for_train<-forecast(NN_fit_humid_train,h=365)
 
 NNX_for_train <- forecast(NNX_fit_train,xreg=cbind(NN_Temp_for_train$mean,NN_Humid_for_train$mean,fourier(ts_avgDaily_train,K=c(2,6),h=365)),h=365)
 
+#Plot foresting results
+autoplot(NNX_for_train, ylab = "Load", main = "Neural Network Exogenous Forecast") 
+
+#Plot model + observed data
+autoplot(ts_avgDaily, ylab = "Load", main = "Neural Network Exogenous vs Observed Data") +
+  autolayer(NNX_for_train, series="ARIMAX",PI=FALSE)
 ```
 
-
 ## Comparing Model Scores and Forecasts
+
 ```{r scores, echo = FALSE}
 #Model 1: STL + ETS
 ETS_scores <- accuracy(ETS_fit$mean,ts_avgDaily_test)  
@@ -281,7 +302,8 @@ autoplot(ts_avgDaily_test, ylab = "Load", main = "Model Comparisons") +
 
 ## Forecasting on 2010 Data (Final Forecast Result)
 
-### Neural Network Forecast 
+### Neural Network Forecast
+
 ```{r Neural Network2, echo = FALSE}
 NN_fit_2010 <- nnetar(ts_avgDaily,p=1,P=0,xreg=fourier(ts_avgDaily, K=c(2,12)))
 
@@ -292,7 +314,8 @@ autoplot(ts_avgDaily, ylab = "Load",main = "Neural Network vs Observed Data") +
 
 ```
 
-### ARIMA + Fourier Forecast 
+### ARIMA + Fourier Forecast
+
 ```{r ARIMA + Fourier2, echo = FALSE}
 ARIMA_Four_fit_2010 <- auto.arima(ts_avgDaily, 
                              seasonal=FALSE, 
@@ -315,8 +338,8 @@ autoplot(ts_avgDaily, ylab = "Load", main = "ARIMA+Fourier vs Observed Data") +
 
 ```
 
+### ARIMA with Exogenous Variable Forecast
 
-### ARIMA with Exogenous Variable Forecast 
 ```{r ARIMAX (with Exogenous Variables)2, echo = FALSE, warning = FALSE}
 ARIMAX_fit <- auto.arima(ts_avgDaily, 
                              seasonal=FALSE, 
@@ -328,9 +351,10 @@ Exog_fit_humid<-auto.arima(exog_ts[,2])
 Temp_for<-forecast(Exog_fit_temp,h=59)
 Humid_for<-forecast(Exog_fit_humid,h=59)
 
-#Forecast with ARIMA fit
-#also need to specify h for fourier terms
 ARIMAX_Four_for <- forecast(ARIMAX_fit,                      xreg=cbind(Temp_for$mean,Humid_for$mean,fourier(ts_avgDaily,K=c(2,12),h=59)),h=59) 
+
+#Plot foresting results
+autoplot(ARIMAX_Four_for, ylab="Load", main = "ARIMAX+Fourier Forecast")
 
 autoplot(ts_avgDaily,  ylab="Load", main="ARIMAX+Fourier vs Observed Data")+
   autolayer(ARIMAX_Four_for, series="ARIMA_FOURIER",PI=FALSE) 
@@ -338,8 +362,8 @@ autoplot(ts_avgDaily,  ylab="Load", main="ARIMAX+Fourier vs Observed Data")+
 
 ```
 
-
 ### Neural Network with Exogenous Variables Forecast
+
 ```{r Neural Network + Exogenous Variables2, echo = FALSE, warning = FALSE}
 NNX_fit <- nnetar(ts_avgDaily,p=1,P=0,xreg=cbind(exog_ts[,1],exog_ts[,2],fourier(ts_avgDaily,K=c(2,6))))
 
@@ -350,12 +374,16 @@ NN_Humid_for<-forecast(NN_fit_humid,h=59)
 
 NNX_for <- forecast(NNX_fit,xreg=cbind(NN_Temp_for$mean,NN_Humid_for$mean,fourier(ts_avgDaily,K=c(2,6),h=59)),h=59)
 
+#Plot foresting results
+autoplot(NNX_for, ylab="Load", main = "NNX Fourier Forecast")
+
 autoplot(ts_avgDaily, ylab = "Load", main = "NNX vs Observed Data") +
   autolayer(NNX_for, series="NNX",PI=FALSE) 
 
 ```
 
 ### Submission Conversion
+
 ```{r submission1, results = FALSE, echo = FALSE}
 #convert to submission format 
 
@@ -375,7 +403,6 @@ write.csv(submission, file = "submission_schofield_zu_NN.csv",row.names = FALSE)
 
 ```
 
-
 ```{r submission3, results = FALSE, echo = FALSE}
 #convert to submission format 
 
@@ -386,5 +413,3 @@ colnames(submission)<-c("date","load")
 write.csv(submission, file = "submission_schofield_zu_NNX.csv",row.names = FALSE)
 
 ```
-
-
