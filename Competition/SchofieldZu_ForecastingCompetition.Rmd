@@ -29,7 +29,7 @@ library(readxl)
 
 ## Data Wrangling
 
-We began this project by loading in three datasets: hourly load, hourl temperature and hourly humidity.
+We began this project by loading in three datasets: hourly load, hourly temperature and hourly humidity.
 Each dataset was manipulated to create figures for daily averages to be used in the forecasting process.
 These datasets were then converted to time series objects, which was then subsetted into training and testing sets to inform the model.
 
